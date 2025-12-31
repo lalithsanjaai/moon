@@ -1,0 +1,820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>Under the Same Moon</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Playfair+Display:ital@0;1&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-top: #0b1026;
+            --bg-bottom: #02030a;
+            --text-color: #e0e0e0;
+            --accent-glow: rgba(255, 255, 255, 0.8);
+        }
+
+        html, body {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Cinzel', serif;
+            background: radial-gradient(ellipse at bottom, #1B2735 0%, #090A0F 100%);
+            color: var(--text-color);
+        }
+
+        canvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 0;
+        }
+
+        /* 
+           REALISTIC MOON IMPLEMENTATION 
+           Uses a spherical gradient approach rather than just a box-shadow cutout.
+        */
+        #moon-container {
+            position: absolute;
+            top: 12%; 
+            left: 50%;
+            transform: translateX(-56%); 
+            width: 180px;
+            height: 180px;
+            z-index: 1;
+            animation: float 8s ease-in-out infinite, heartbeat 3s ease-in-out infinite; /* Added heartbeat */
+            cursor: pointer; /* Clickable */
+        }
+        
+        @keyframes heartbeat {
+            0%, 100% { transform: translateX(-56%) scale(1); }
+            50% { transform: translateX(-56%) scale(1.02); }
+        }
+
+        .realistic-moon {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: relative;
+            
+            /* 
+               IMPROVED BLENDING: 
+               Instead of a solid dark color, we use a gradient that fades to transparent 
+               at the edges or matches the sky, effectively "hiding" the dark part 
+               better against the starry background.
+            */
+            background: radial-gradient(circle at 30% 30%, 
+                rgba(20, 20, 30, 0.9) 0%, 
+                rgba(5, 5, 10, 0) 70%
+            );
+            
+            /* Subtle rim light for the dark side to separate it slightly from deep space */
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.02); 
+        }
+
+        .realistic-moon::before {
+            /* The lit crescent part */
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            
+            /* 
+               Complex shadow to create the crescent.
+               The 'inset' shadow creates the terminator line.
+               Increased the softness slightly for a dreamier look.
+            */
+            box-shadow: inset -25px 5px 0 0 #ffffe0, /* The main bright crescent */
+                        inset -30px 5px 15px 0 rgba(255, 255, 255, 0.6), 
+                        0 0 30px rgba(255, 255, 200, 0.25); /* Stronger outer glow */
+            
+            transform: rotate(-10deg);
+            filter: drop-shadow(0 0 15px rgba(255, 255, 200, 0.3));
+        }
+
+        /* Texture overlay */
+        .realistic-moon::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            background: url('data:image/svg+xml;utf8,<svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg"><filter id="noise"><feTurbulence type="fractalNoise" baseFrequency="0.6" /></filter><rect width="100%" height="100%" filter="url(%23noise)" opacity="0.3"/></svg>');
+            mix-blend-mode: soft-light;
+            opacity: 0.2; /* Subtler texture */
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateX(-56%) translateY(0); }
+            50% { transform: translateX(-56%) translateY(-10px); }
+        }
+
+        #ui-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #text-container {
+            position: absolute;
+            bottom: 22%;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            pointer-events: auto;
+        }
+
+        .message {
+            font-size: 1.6rem;
+            line-height: 1.6;
+            text-align: center;
+            opacity: 0;
+            max-width: 700px;
+            padding: 0 20px;
+            transition: opacity 1.5s ease-in-out;
+            text-shadow: 0 0 15px rgba(255,255,255,0.3);
+            letter-spacing: 1px;
+        }
+        
+        .message.active {
+            opacity: 1;
+        }
+
+        #countdown {
+            font-size: 5rem;
+            font-weight: 700;
+            opacity: 0;
+            text-shadow: 0 0 40px rgba(255,255,255,0.9);
+            transition: opacity 1s, transform 0.3s;
+            text-align: center;
+            padding: 0 20px;
+        }
+
+        /* Modal/Secret */
+        #secret-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.85); /* Darker background */
+            backdrop-filter: blur(10px);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.8s;
+        }
+
+        #secret-modal.visible {
+            display: flex;
+            opacity: 1;
+        }
+
+        .letter {
+            background: linear-gradient(145deg, rgba(20,20,30,0.95), rgba(5,5,10,0.98));
+            padding: 50px 40px;
+            max-width: 90%;
+            width: 650px; /* Wider for better reading */
+            max-height: 85vh; /* Prevent going off-screen */
+            overflow-y: auto; /* Allow scrolling if long */
+            text-align: center;
+            border-radius: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+            box-shadow: 0 20px 70px rgba(0,0,0,0.6), 0 0 40px rgba(255,255,255,0.05);
+            transform: translateY(30px);
+            transition: transform 0.6s cubic-bezier(0.19, 1, 0.22, 1);
+            pointer-events: auto;
+            /* Scrollbar styling */
+            scrollbar-width: thin;
+            scrollbar-color: rgba(255,255,255,0.2) transparent;
+        }
+
+        /* Custom Scrollbar for Chrome/Safari */
+        .letter::-webkit-scrollbar {
+            width: 6px;
+        }
+        .letter::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .letter::-webkit-scrollbar-thumb {
+            background-color: rgba(255,255,255,0.2);
+            border-radius: 10px;
+        }
+
+        #secret-modal.visible .letter {
+            transform: translateY(0);
+        }
+
+        .letter p {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.25rem; /* Slightly smaller for better fit */
+            line-height: 1.8;
+            color: #f0f0f0;
+            margin-bottom: 40px;
+            font-style: italic;
+            white-space: pre-line; /* Respect newlines in text */
+        }
+
+        .btn-close {
+            padding: 14px 40px;
+            border: 1px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.05);
+            color: #fff;
+            font-family: 'Cinzel', serif;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            font-size: 0.85rem;
+            margin-bottom: 20px; /* Space at bottom when scrolling */
+        }
+
+        .btn-close:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: #fff;
+            box-shadow: 0 0 25px rgba(255,255,255,0.4);
+            transform: translateY(-2px);
+        }
+
+        .footer {
+            position: fixed;
+            bottom: 20px;
+            width: 100%;
+            text-align: center;
+            color: rgba(255, 255, 255, 0.5);
+            font-size: 0.9rem;
+            letter-spacing: 2px;
+            z-index: 10;
+            pointer-events: none;
+            font-family: 'Cinzel', serif;
+        }
+
+
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            #moon-container {
+                width: 120px;
+                height: 120px;
+                top: 15%;
+            }
+            .realistic-moon::before {
+                box-shadow: inset -20px 4px 0 0 #ffffe0, 
+                            inset -24px 4px 8px 0 rgba(255, 255, 255, 0.5), 
+                            0 0 20px rgba(255, 255, 200, 0.15);
+            }
+            #text-container {
+                bottom: 18%;
+            }
+            .message {
+                font-size: 1.2rem;
+            }
+            #countdown {
+                font-size: 3rem; 
+            }
+            .letter {
+                padding: 30px 20px;
+                width: 90%;
+                max-height: 80vh;
+                border-radius: 15px; /* Restored rounded corners */
+                display: block; 
+                overflow-y: auto;
+                border: 1px solid rgba(255,255,255,0.1); /* Restored border */
+                background: linear-gradient(145deg, rgba(20,20,30,0.98), rgba(5,5,10,0.99));
+            }
+            .letter p {
+                font-size: 1.1rem; /* Smaller font on mobile */
+                margin-top: 40px; /* Space from top */
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <canvas id="sky"></canvas>
+
+    <div id="moon-container">
+        <div class="realistic-moon"></div>
+    </div>
+
+    <div id="ui-layer">
+        <div id="countdown"></div>
+        <div id="star-tooltip" style="position: absolute; display: none; background: rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 20px; color: #fff; font-size: 0.9rem; pointer-events: none; backdrop-filter: blur(4px); box-shadow: 0 0 10px rgba(255,255,255,0.2);">Our Forever ✨</div>
+    </div>
+    
+    <!-- Audio Trigger -->
+    <div style="position: fixed; bottom: 20px; left: 20px; z-index: 50;">
+        <button id="audio-btn" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.2); color: rgba(255,255,255,0.7); padding: 10px 20px; border-radius: 30px; font-family: 'Cinzel', serif; cursor: pointer; transition: 0.3s;">
+             🎵 Music
+        </button>
+    </div>
+    <audio id="bg-music" loop>
+        <source src="music.mp3" type="audio/mp3">
+        <source src="https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3" type="audio/mp3">
+    </audio>
+    
+    <div id="text-container">
+        <div id="msg-display" class="message"></div>
+    </div>
+
+    <div id="secret-modal">
+        <div class="letter">
+            <p>
+               oii pondati,🤍<br><br>
+
+Moon epdi tides ah silent ah pull pannutho,
+andha maadhiri, neeyum oru vaarthai kooda sollaama ennoda heart ah pull pannita diii 💖
+Un presence mattume podhum, en world calm ah, complete ah feel aagum 🌙<br><br>
+
+2026 kulla, un kai ya pidichu, side-by-side nadakka naan romba aasai irrukan ammu .
+Indha new year, namma rendu perukum oru Amazing year ahh irukkanum.
+Every single day, namma future oda  promise keep pannura oru naalaa irukkanum.✨<br><br>
+
+Life enna test pannalum,
+neeyum naanum serndhu face panikula mu ella situtation la uhh onna irruthu ellam pathukulam ,
+and no matter mu evolo sanda potalum evolo hard ahh ponalum at last we shoud fix it and move forward .
+i konw we both are not perfect but i love you more than anything in this world .
+we will never give up on each other no mateers what ..!!
+Un love ennoda  strength irukku,
+un smile ennoda hope,
+and un kooda irukura indha feeling dhaan ennoda home Ammu💞<br><br>
+
+Indha 2026, namma memories la fill aagattum mu ,
+namma love innum strong grow aagattum,
+and namma story end illaama, beautiful continue aagattum 💫<br><br>
+
+Happy New Year, en uyire, lest start the another azhagana beginning. ❤️✨
+            </p>
+            <button class="btn-close" id="close-btn">Step into 2026 🤍</button>
+        </div>
+    </div>
+
+    <div class="footer">with love ~.🌙🤍</div>
+
+    
+
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // Canvas Setup
+    const canvas = document.getElementById("sky");
+    const ctx = canvas.getContext("2d");
+    let w, h;
+
+    const resize = () => {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+    };
+    window.addEventListener("resize", resize);
+    resize();
+
+    // --- Audio System ---
+    const audioBtn = document.getElementById('audio-btn');
+    const bgMusic = document.getElementById('bg-music');
+    let isPlaying = false;
+
+    audioBtn.addEventListener('click', () => {
+        if (isPlaying) {
+            bgMusic.pause();
+            audioBtn.innerHTML = "🎵 Music";
+            audioBtn.style.borderColor = "rgba(255,255,255,0.2)";
+        } else {
+            bgMusic.volume = 0.4;
+            bgMusic.play().catch(e => {
+                console.log("Audio error:", e);
+                alert("Playback failed. Please ensure 'music.mp3' is in the folder or allow audio permissions. Error: " + e.message);
+            });
+            audioBtn.innerHTML = "⏸ Playing";
+            audioBtn.style.borderColor = "rgba(255,255,255,0.8)";
+        }
+        isPlaying = !isPlaying;
+    });
+
+    // --- Special Star System ---
+    // A single star that is constant and interactive
+    const specialStar = {
+        x: w * 0.85,
+        y: h * 0.15,
+        size: 3,
+        alpha: 1,
+        hovered: false
+    };
+    const tooltip = document.getElementById('star-tooltip');
+
+    // --- Hearts System (Moon Interaction) ---
+    const hearts = [];
+    class Heart {
+        constructor(x, y) {
+            this.x = x;
+            this.y = y;
+            this.size = Math.random() * 10 + 5;
+            this.speedY = Math.random() * 1 + 0.5;
+            this.drift = (Math.random() - 0.5) * 1;
+            this.life = 1;
+            this.hue = 340 + Math.random() * 20; // Pinks
+        }
+        update() {
+            this.y -= this.speedY;
+            this.x += this.drift;
+            this.life -= 0.01;
+        }
+        draw() {
+            ctx.save();
+            ctx.globalAlpha = this.life;
+            ctx.fillStyle = `hsl(${this.hue}, 80%, 60%)`;
+            ctx.font = `${this.size}px serif`;
+            ctx.fillText("❤", this.x, this.y);
+            ctx.restore();
+        }
+    }
+
+
+
+    // --- Star System ---
+    const stars = [];
+    const STAR_COUNT = 800;
+    const mouse = { x: 0, y: 0 };
+
+    class Star {
+        constructor() {
+            this.x = Math.random() * w;
+            this.y = Math.random() * h;
+            this.r = Math.random() * 1.3;
+            this.baseAlpha = Math.random() * 0.8 + 0.1;
+            this.alpha = this.baseAlpha;
+            this.speed = (Math.random() * 0.15) + 0.01;
+            this.twinkleSpeed = Math.random() * 0.04;
+            this.twinkleDir = 1;
+        }
+
+        update() {
+            this.y -= this.speed;
+            if (this.y < 0) this.y = h;
+
+            this.alpha += this.twinkleSpeed * this.twinkleDir;
+            if (this.alpha > 1 || this.alpha < 0.1) this.twinkleDir *= -1;
+
+            const dx = this.x - mouse.x;
+            const dy = this.y - mouse.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const glow = dist < 200 ? (200 - dist) / 150 : 0; 
+            
+            return Math.min(this.alpha + glow, 1);
+        }
+
+        draw() {
+            const currentAlpha = this.update();
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, this.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(255, 255, 255, ${currentAlpha})`;
+            ctx.fill();
+        }
+    }
+
+    for (let i = 0; i < STAR_COUNT; i++) stars.push(new Star());
+
+    window.addEventListener("mousemove", e => {
+        mouse.x = e.clientX;
+        mouse.y = e.clientY;
+    });
+
+    // --- Shooting Star System ---
+    let shootingStars = [];
+
+    class ShootingStar {
+        constructor() {
+            this.reset();
+        }
+
+        reset() {
+            this.x = Math.random() * w;
+            this.y = Math.random() * h * 0.5;
+            this.len = Math.random() * 80 + 30;
+            this.speed = Math.random() * 8 + 4;
+            this.size = Math.random() * 2 + 0.1;
+            this.waitTime = new Date().getTime() + Math.random() * 5000 + 3000;
+            this.active = false;
+        }
+
+        update() {
+            if (this.active) {
+                this.x -= this.speed;
+                this.y += this.speed;
+                if (this.x < 0 || this.y > h) {
+                    this.active = false;
+                    this.waitTime = new Date().getTime() + Math.random() * 10000 + 4000; 
+                }
+            } else {
+                if (new Date().getTime() > this.waitTime) {
+                    this.active = true;
+                    this.x = Math.random() * w + 300;
+                    this.y = Math.random() * h * 0.2;
+                }
+            }
+        }
+
+        draw() {
+            if (!this.active) return;
+            const grad = ctx.createLinearGradient(this.x, this.y, this.x + this.len, this.y - this.len);
+            grad.addColorStop(0, "rgba(255,255,255,1)");
+            grad.addColorStop(1, "rgba(255,255,255,0)");
+
+            ctx.lineWidth = this.size;
+            ctx.beginPath();
+            ctx.moveTo(this.x, this.y);
+            ctx.lineTo(this.x + this.len, this.y - this.len);
+            ctx.strokeStyle = grad; 
+            ctx.stroke();
+        }
+    }
+    
+    for(let i=0; i<3; i++) shootingStars.push(new ShootingStar());
+
+    // --- NEW: Firework System (Cosmic Style) ---
+    // Replaces the cartoon sparkles with physics-based particles
+    const particles = [];
+    const fireworks = [];
+    let fireworksActive = false;
+
+    // --- Interaction Listeners for New Features ---
+    const moonContainer = document.getElementById('moon-container');
+    const moonRect = moonContainer.getBoundingClientRect();
+    const moonCenterX = moonRect.left + moonRect.width/2;
+    const moonCenterY = moonRect.top + moonRect.height/2;
+
+    // Spawn hearts on hover near moon
+    window.addEventListener('mousemove', (e) => {
+        // Special Star Logic
+        const dxStar = e.clientX - specialStar.x;
+        const dyStar = e.clientY - specialStar.y;
+        if (Math.sqrt(dxStar*dxStar + dyStar*dyStar) < 20) {
+            specialStar.hovered = true;
+            tooltip.style.display = 'block';
+            tooltip.style.left = (e.clientX + 10) + 'px';
+            tooltip.style.top = (e.clientY - 30) + 'px';
+        } else {
+            specialStar.hovered = false;
+            tooltip.style.display = 'none';
+        }
+
+        // Moon Heart Logic
+        // Simple approximation
+        const dx = e.clientX - (w/2);
+        const dy = e.clientY - (h * 0.2); // Rough moon position from CSS top: 12% + center
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        
+        if (dist < 100) { // Approx moon radius
+            if (Math.random() < 0.1) {
+                hearts.push(new Heart(e.clientX, e.clientY));
+            }
+        }
+    });
+
+    moonContainer.addEventListener('click', (e) => {
+        // Burst of hearts
+        for(let i=0; i<10; i++) {
+             hearts.push(new Heart(e.clientX + (Math.random()-0.5)*50, e.clientY + (Math.random()-0.5)*50));
+        }
+    });
+
+    class Firework {
+        constructor() {
+            this.x = Math.random() * w;
+            this.y = h;
+            this.targetY = Math.random() * (h * 0.4) + h * 0.1; // Explode in upper half
+            this.speed = Math.random() * 3 + 5;
+            this.angle = -Math.PI / 2 + (Math.random() - 0.5) * 0.2; // Slight spread
+            this.vx = Math.cos(this.angle) * this.speed;
+            this.vy = Math.sin(this.angle) * this.speed;
+            this.hue = Math.random() * 360;
+            this.exploded = false;
+        }
+
+        update() {
+            this.x += this.vx;
+            this.y += this.vy;
+            this.vy += 0.02; // Gravity applied to launch (slows down)
+            
+            if (this.vy >= 0 || this.y <= this.targetY) {
+                this.explode();
+                return false; // Remove firework
+            }
+            return true;
+        }
+
+        draw() {
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 3, 0, Math.PI * 2);
+            ctx.fillStyle = `hsl(${this.hue}, 100%, 70%)`;
+            ctx.fill();
+        }
+
+        explode() {
+            const particleCount = 60 + Math.random() * 40;
+            for (let i = 0; i < particleCount; i++) {
+                particles.push(new Particle(this.x, this.y, this.hue));
+            }
+        }
+    }
+
+    class Particle {
+        constructor(x, y, hue) {
+            this.x = x;
+            this.y = y;
+            this.hue = hue;
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 4 + 1;
+            this.vx = Math.cos(angle) * speed;
+            this.vy = Math.sin(angle) * speed;
+            this.friction = 0.96;
+            this.gravity = 0.05;
+            this.life = 1;
+            this.decay = Math.random() * 0.015 + 0.01;
+            this.brightness = Math.random() * 40 + 50;
+        }
+
+        update() {
+            this.vx *= this.friction;
+            this.vy *= this.friction;
+            this.vy += this.gravity;
+            this.x += this.vx;
+            this.y += this.vy;
+            this.life -= this.decay;
+        }
+
+        draw() {
+            if (this.life <= 0) return;
+            ctx.beginPath();
+            ctx.arc(this.x, this.y, 2, 0, Math.PI * 2);
+            ctx.fillStyle = `hsla(${this.hue}, 100%, ${this.brightness}%, ${this.life})`;
+            ctx.fill();
+        }
+    }
+
+    function animate() {
+        // Use semi-transparent clear for trails
+        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)'; 
+        ctx.fillRect(0, 0, w, h);
+        // We need to redraw stars every frame if we clearRect, but since we are using fillRect trail effect,
+        // the stars would get dimmed. 
+        // Better approach for this specific aesthetic: clear completely, redraw stars, then fireworks.
+        ctx.clearRect(0, 0, w, h);
+
+        // Draw background stars
+        stars.forEach(star => star.draw());
+        
+        // Draw shooting stars
+        shootingStars.forEach(ss => {
+            ss.update();
+            ss.draw();
+        });
+
+        // Draw Fireworks
+        if (fireworksActive) {
+            if (Math.random() < 0.05) { // Random launch chance
+                 fireworks.push(new Firework());
+            }
+            
+            for (let i = fireworks.length - 1; i >= 0; i--) {
+                if (!fireworks[i].update()) {
+                    fireworks.splice(i, 1);
+                } else {
+                    fireworks[i].draw();
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                particles[i].draw();
+                if (particles[i].life <= 0) {
+                    particles.splice(i, 1);
+                }
+            }
+        }
+        
+        // Draw Special Star
+        ctx.beginPath();
+        const starGlow = specialStar.hovered ? 15 : 5;
+        const starColor = specialStar.hovered ? "rgba(255, 200, 255, 1)" : "rgba(255, 255, 255, 0.9)";
+        ctx.shadowBlur = starGlow;
+        ctx.shadowColor = "white";
+        ctx.arc(specialStar.x, specialStar.y, specialStar.size, 0, Math.PI*2);
+        ctx.fillStyle = starColor;
+        ctx.fill();
+        ctx.shadowBlur = 0; // Reset
+
+
+
+        // Draw Hearts
+        for (let i = hearts.length - 1; i >= 0; i--) {
+            hearts[i].update();
+            hearts[i].draw();
+            if (hearts[i].life <= 0) hearts.splice(i, 1);
+        }
+
+        requestAnimationFrame(animate);
+    }
+    animate();
+
+
+    // --- Text Sequence ---
+    const msgDisplay = document.getElementById("msg-display");
+    const messages = [
+        "Miles apart… yet we look at the same moon.",
+        "Distance is hard. Missing you is harder.",
+        "But love doesn’t measure miles. It measures hearts."
+    ];
+
+    let msgIndex = 0;
+
+    function showNextMessage() {
+        if (msgIndex >= messages.length) {
+            setTimeout(startCountdown, 2500);
+            return;
+        }
+
+        msgDisplay.textContent = messages[msgIndex];
+        msgDisplay.classList.add("active");
+
+        setTimeout(() => {
+            msgDisplay.classList.remove("active");
+            msgIndex++;
+            setTimeout(showNextMessage, 1800);
+        }, 4500);
+    }
+
+    // Start slightly sooner
+    setTimeout(showNextMessage, 1000);
+
+
+    // --- Countdown ---
+    const countdownEl = document.getElementById("countdown");
+
+    function startCountdown() {
+        let n = 10;
+        countdownEl.style.opacity = 1;
+
+        const timer = setInterval(() => {
+            countdownEl.textContent = n;
+            countdownEl.style.transform = "scale(1.2)";
+            setTimeout(() => countdownEl.style.transform = "scale(1)", 200);
+            
+            n--;
+            if (n < 0) {
+                clearInterval(timer);
+                countdownEl.innerHTML = "Happy New Year<br>2026<br>My Love🤍";
+                triggerFinale();
+            }
+        }, 1000);
+    }
+
+    function triggerFinale() {
+        // Enhance Moon Glow
+        document.getElementById('moon-container').style.filter = "drop-shadow(0 0 80px rgba(255,255,255,0.8))";
+        
+        // More shooting stars
+        for(let i=0; i<15; i++) {
+            shootingStars.push(new ShootingStar());
+        }
+        shootingStars.forEach(ss => ss.waitTime = new Date().getTime()); 
+
+        // ACTIVATE FIREWORKS
+        fireworksActive = true;
+
+        // Show secret modal after 5 seconds
+        setTimeout(showSecret, 5000);
+    }
+
+    // --- Modal ---
+    const secretModal = document.getElementById("secret-modal");
+    const closeBtn = document.getElementById("close-btn");
+
+    function showSecret() {
+        secretModal.classList.add("visible");
+    }
+
+    closeBtn.addEventListener("click", () => {
+        secretModal.classList.remove("visible");
+        msgDisplay.textContent = "To 2026, and a lifetime more.";
+        msgDisplay.classList.add("active");
+        
+        // Calm down effects slightly
+        fireworksActive = false;
+        document.getElementById('moon-container').style.filter = "drop-shadow(0 0 30px rgba(255,255,255,0.5))";
+    });
+});
+</script>
+</body>
+</html>
